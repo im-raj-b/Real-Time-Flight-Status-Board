@@ -11,7 +11,7 @@ import {
   Paper,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Spinner from "./Spinner";
 import { fetchFlights } from "../api/flighsAPI";
 
@@ -25,54 +25,82 @@ export interface Flight {
   status: string;
 }
 
-export interface TableProps {
-  flightsData: Flight[];
-  loadingFlag?: boolean;
-}
-
 export default function FlightStatusTable() {
-  const [flightsData, setFlightsData] = useState<[]>([]);
+  const [flightsData, setFlightsData] = useState<Flight[]>([]);
   const [loadingFlag, setLoading] = useState<boolean>(true);
-  useEffect(() => {
-    fetchFlights().then((data) => {
-      console.log(data);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const fetchFlightData = async () => {
+    try {
+      const data = await fetchFlights();
+      console.log("Fetching flight data:", data);
       setFlightsData(data);
-      setLoading(false);
-    });
-  }, []);
+    } catch (error) {
+      console.error("Error fetching flights:", error);
+    }
+  };
+
+  const startPolling = () => {
+    if (!intervalRef.current) {
+      intervalRef.current = setInterval(() => {
+        if (document.visibilityState === "visible") {
+          fetchFlightData();
+        }
+      }, 10000);
+    }
+  };
+
+  const stopPolling = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  };
+
   useEffect(() => {
-    console.log("Second UseEffect");
+    // Initial API call
+    setLoading(true);
+    fetchFlightData().finally(() => setLoading(false));
 
-    const interval = setInterval(() => {
-      //   setLoading(true);
-      fetchFlights().then((data) => {
-        console.log(data);
-        setFlightsData(data);
-        // setLoading(false);
-      });
-    }, 10000);
+    // Start polling on initial render
+    startPolling();
 
-    return () => clearInterval(interval);
-  }, []);
+    // Handle tab visibility change
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        startPolling(); // Start polling when tab is active
+      } else {
+        stopPolling(); // Stop polling when tab is inactive
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      stopPolling(); // Clean up polling on component unmount
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []); // Only run on initial render
 
   return (
-    <>
-      <Box sx={{ width: "80%", margin: "auto", textAlign: "center", mt: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          Real-Time Flight Status Board
-        </Typography>
-        <FlightTable flightsData={flightsData} loadingFlag={loadingFlag} />
-      </Box>
-    </>
+    <Box sx={{ width: "80%", margin: "auto", textAlign: "center", mt: 4 }}>
+      <Typography variant="h4" gutterBottom>
+        Real-Time Flight Status Board
+      </Typography>
+      <FlightTable flightsData={flightsData} loadingFlag={loadingFlag} />
+    </Box>
   );
 }
 
-export const FlightTable: React.FC<TableProps> = (props) => {
+export const FlightTable: React.FC<{
+  flightsData: Flight[];
+  loadingFlag?: boolean;
+}> = ({ flightsData, loadingFlag }) => {
   const navigate = useNavigate();
 
   return (
     <TableContainer component={Paper}>
-      {props.loadingFlag && (
+      {loadingFlag && (
         <Backdrop
           open={true}
           sx={{
@@ -88,16 +116,16 @@ export const FlightTable: React.FC<TableProps> = (props) => {
         <TableHead>
           <TableRow>
             <TableCell>Airline</TableCell>
-            <TableCell align="right">Departure time</TableCell>
+            <TableCell align="right">Departure Time</TableCell>
             <TableCell align="right">Destination</TableCell>
-            <TableCell align="right">Flight number</TableCell>
+            <TableCell align="right">Flight Number</TableCell>
             <TableCell align="right">Origin</TableCell>
             <TableCell align="right">Status</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
-          {props.flightsData.length ? (
-            props.flightsData.map((row: Flight) => (
+          {flightsData.length ? (
+            flightsData.map((row) => (
               <TableRow
                 key={row.id}
                 style={{ cursor: "pointer" }}
@@ -121,15 +149,11 @@ export const FlightTable: React.FC<TableProps> = (props) => {
               </TableRow>
             ))
           ) : (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              No flight data available
-            </div>
+            <TableRow>
+              <TableCell colSpan={6} align="center">
+                No flight data available
+              </TableCell>
+            </TableRow>
           )}
         </TableBody>
       </Table>
