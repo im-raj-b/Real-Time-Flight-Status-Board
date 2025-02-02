@@ -46,7 +46,7 @@ export default function FlightStatusTable() {
         if (document.visibilityState === "visible") {
           fetchFlightData();
         }
-      }, 10000);
+      }, 30000);
     }
   };
 
