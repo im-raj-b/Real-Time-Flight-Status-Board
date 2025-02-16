@@ -11,7 +11,7 @@ import {
   Paper,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Spinner from "./Spinner";
 import { fetchFlights } from "../api/flighsAPI";
 
@@ -43,9 +43,7 @@ export default function FlightStatusTable() {
   const startPolling = () => {
     if (!intervalRef.current) {
       intervalRef.current = setInterval(() => {
-        if (document.visibilityState === "visible") {
-          fetchFlightData();
-        }
+        fetchFlightData();
       }, 30000);
     }
   };
@@ -57,6 +55,15 @@ export default function FlightStatusTable() {
     }
   };
 
+  // Handle tab visibility change
+  const handleVisibilityChange = useCallback(() => {
+    if (document.visibilityState === "visible") {
+      startPolling(); // Start polling when tab is active
+    } else {
+      stopPolling(); // Stop polling when tab is inactive
+    }
+  }, []);
+
   useEffect(() => {
     // Initial API call
     setLoading(true);
@@ -64,23 +71,16 @@ export default function FlightStatusTable() {
 
     // Start polling on initial render
     startPolling();
+  }, []); // Only run on initial render
 
-    // Handle tab visibility change
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        startPolling(); // Start polling when tab is active
-      } else {
-        stopPolling(); // Stop polling when tab is inactive
-      }
-    };
-
+  useEffect(() => {
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       stopPolling(); // Clean up polling on component unmount
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []); // Only run on initial render
+  }, []);
 
   return (
     <Box sx={{ width: "80%", margin: "auto", textAlign: "center", mt: 4 }}>
